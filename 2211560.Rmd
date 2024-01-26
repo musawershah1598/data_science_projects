@@ -1,0 +1,215 @@
+---
+title: "MA331-Report: 2211560"
+subtitle: "TED Talks by Speaker Ueli Gegenschatz and Speaker Herbie Hancock"
+author: "Shah, Musawer"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+### Don't delete this setup code chunk from your file
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, comment = NULL)   ## DON'T ALTER THIS: this is to prevent printing the code or any unnecessary addition in your final "html" report file.
+
+# You can extend this list below to load all the packages required for your analyses:
+#====================================================================================
+library(dsEssex)
+library(tidyverse)
+library(tidytext)
+
+# load the 'ted_talks' data
+#=========================
+data(ted_talks)
+```
+
+# Introduction
+
+In this report I will analyse two ted talks transcripts that has been assigned to me. The two talks are **Extreme wingsuit flying** and **An all-star set**.
+
+This first talk was given by **Ueli Gegenschatz** in **April 2009**. In this Talk, He shares his experiences as an extreme wingsuit flyer, and the lessons he learned for these sports. He try to experience the sport in different ways like sky diving, jumping from a moving truck, wingsuit diving, and from different other places and formats. In this talk he gave how to push your limits upto the full extent.
+
+The second talk was given by **Herbi Hancock** in **Jan 2010**. This talks don't have a lot of speaking, instead it was more of a musical type where he deliver a powerful performance with two of his other friend.
+
+# Methods
+
+In this report, I had first loaded the data of TED TALKS from **dsEssex** library and then filter it according to the speaker I had be assigned with. After that I had removed the unnecassary words ***stopwords*** and show some basic summary of the most frequent words they had used. After than I visualize the top words they had used using **ggplot** library both collectively and individually. Then I compare the most frequent words of both speaker and present it in the graph. And then finally I had make a deeper comparison between the two speakers by sentimentally analysing it and visualization the Log odds ratio side by side.
+
+# Results
+
+### Filter Ted Talks
+
+First I filter the ted talks data for my assigned speakers and gave a basic insight into data using `head` function.
+
+```{r}
+# setting speaker names so we don't have to write it manually.
+UELI_SPEAKER <- "Ueli Gegenschatz"
+HERBI_SPEAKER <- "Herbie Hancock"
+
+# filter data of two speakers
+MyData <- ted_talks %>% filter(speaker %in% c(UELI_SPEAKER, HERBI_SPEAKER))
+
+# show a basic insight.
+head(MyData)
+```
+
+### Flat data into tidy format and remove stopwords.
+
+Then i change the text column of my data into tidy word column using `unnest_tokens` function, and also remove the stopwords using `anti_join`.
+
+```{r}
+# flat data into one word per observation
+MyData <- MyData %>%
+  unnest_tokens(word, text)
+
+# remove stopwords
+MyData <- MyData %>%
+  anti_join(get_stopwords())
+
+head(MyData)
+```
+
+### Summary of Words Used.
+
+Then i counted the words used by each speaker and print it in descending order.
+
+**Ueli Gegenschatz most frequent words**
+
+```{r}
+# No of Words Ueli Gegenschatz used in Desc Order
+MyData %>% filter(speaker == UELI_SPEAKER) %>%
+  count(word, sort = TRUE)
+```
+
+**Herbi Hancock most frequent words**
+
+```{r}
+# No of Words Herbi Hancock Used in Desc order
+MyData %>% filter(speaker == HERBI_SPEAKER) %>%
+  count(word, sort=TRUE)
+```
+
+### Visualization of frequent words by both speaker.
+
+```{r}
+# Visualization for top words by both speaker
+MyData  %>%
+  count(word, sort=TRUE) %>%
+  slice_max(n, n=20) %>%   ## top 20 most used words
+  mutate(word = reorder(word,n)) %>%
+  ggplot(aes(n, word)) + 
+  geom_col() +
+  labs(title = "Most Frequent Words Used By Both Speaker")
+```
+
+```{r}
+# Visualization for top words by UELI Gegenschatz
+MyData %>% filter(speaker == UELI_SPEAKER) %>%
+  count(word, sort=TRUE) %>%
+  slice_max(n, n=20) %>%
+  mutate(word = reorder(word,n)) %>%
+  ggplot(aes(n,word)) +
+  geom_col(fill="#f28482") + 
+  labs(title = paste("Most Frequent Words Used By ", UELI_SPEAKER))
+```
+
+```{r}
+# Visualization for top words by Herbi Hancock
+MyData %>% filter(speaker == HERBI_SPEAKER) %>%
+  count(word, sort=TRUE) %>%
+  slice_max(n, n=20) %>%
+  mutate(word = reorder(word,n)) %>%
+  ggplot(aes(n,word)) +
+  geom_col(fill="#84a59d") + 
+  labs(title = paste("Most Frequent Words Used By ", HERBI_SPEAKER))
+```
+
+### Comparing most frequent words of both speakers.
+
+```{r}
+library(ggrepel)
+
+# Comparing most frequent words of both speaker
+MyData %>%
+  group_by(speaker) %>%
+  count(word, sort=TRUE) %>%
+  filter(sum(n) > 5) %>%
+  ungroup() %>%
+  pivot_wider(names_from = "speaker", values_from = "n", values_fill = 0) %>%
+  ggplot(aes(`Ueli Gegenschatz`, `Herbie Hancock`)) +
+  geom_abline(color = "black", linewidth = 1.2, alpha = 0.75, lty = 3) +
+  geom_text_repel(aes(label = word), max.overlaps = 15) +  ## replace each point with actual word.
+  coord_fixed()
+```
+
+### Showing sentiment of each word by Ueli Gegenschatz
+
+```{r}
+MyData %>%
+    filter(speaker == UELI_SPEAKER) %>%
+    inner_join(get_sentiments("nrc"), by = "word")
+```
+
+### Showing sentiment of each word by Herbi Hancock
+
+```{r}
+## use inner_join function to assign nrc sentiment to each word
+MyData %>%
+    filter(speaker == HERBI_SPEAKER) %>%
+    inner_join(get_sentiments("nrc"), by = "word")
+```
+
+### Odds Ratio & Odds Ration of Sentiment for Ueli Gegenschatz & Herbi Hancock
+
+In the below code I had also replaced the value of 0 from **Herbie Hancock** sentiments with a small value of 0.5 in order to avoid divide by zero in Odds Ratio
+
+```{r}
+MyData %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  count(speaker, sentiment) %>%
+  pivot_wider(names_from = speaker, values_from = n, values_fill = 0) %>%
+  mutate(`Herbie Hancock` = replace(`Herbie Hancock`, `Herbie Hancock` == 0,0.5)) %>%
+  mutate(OR = compute_OR(`Ueli Gegenschatz`, `Herbie Hancock`, correction = FALSE), log_OR = log(OR), sentiment = reorder(sentiment, log_OR))
+
+```
+
+### Visualize the logs_OR of sentiments of both speaker.
+
+
+```{r}
+# sentiment analysis of words of Ueli Gegenschatz and Herbie Hancock
+# show sentiment on y-axis while their log Odds Ration on x-axis
+# red is for value greater than 0 and green for less than 0
+MyData %>%
+  inner_join(get_sentiments("nrc"), by = "word") %>%
+  count(speaker, sentiment) %>%
+  pivot_wider(names_from = speaker, values_from = n, values_fill = 0) %>%
+  mutate(`Herbie Hancock` = replace(`Herbie Hancock`, `Herbie Hancock` == 0,0.5)) %>%
+  mutate(OR = compute_OR(`Ueli Gegenschatz`, `Herbie Hancock`, correction = FALSE)) %>%
+  mutate(log_OR = log(OR)) %>%
+  mutate(sentiment = reorder(sentiment, log_OR)) %>%
+  ggplot(aes(sentiment, log_OR, fill = log_OR < 0)) +
+  geom_col(show.legend = FALSE) +
+  ylab("Log odds ratio") + ggtitle("The sentiment of both speaker.") +
+  coord_flip() +
+  scale_fill_manual(name = "", values = c("red", "green"))
+
+```
+
+### Visualize words & log_OR in different sentiment
+In the below graph I visualize the most frequent word value on x-axis and log_OR in y-axis according to each sentiment. 
+
+```{r}
+MyData %>%
+    inner_join(get_sentiments("nrc"), by = "word") %>%
+    count(speaker, sentiment, word) %>%
+    slice_max(n, n = 15) %>%
+    pivot_wider(names_from = speaker, values_from = n, values_fill = 0) %>%
+    mutate(`Herbie Hancock` = replace(`Herbie Hancock`, `Herbie Hancock` == 0,0.5)) %>%
+    mutate(OR = compute_OR(`Ueli Gegenschatz`, `Herbie Hancock`, correction = FALSE)) %>%
+    mutate(log_OR = log(OR)) %>%
+    mutate(sentiment = reorder(sentiment, log_OR)) %>%
+    ggplot(aes(word, log_OR, fill = log_OR < 0)) +
+    geom_col() +
+    facet_wrap(~sentiment,scales = "free_x", nrow = 3) +
+    ylab("Log odds ratio") + ggtitle("The association between sentiment of both speaker.") +
+    coord_flip() +
+    scale_fill_manual(name = "", values = c("red", "green"))
+```
